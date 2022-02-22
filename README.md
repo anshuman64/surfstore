@@ -111,3 +111,20 @@ $ make clean
 ```
 
 
+Notes:
+- No servers added
+- No leader elections
+
+- Client connects to server (loop)
+        - Client queries leader
+        - If not leader or crashed, reply with error
+        - Retry to find leader
+- Leader queries followers
+        - If majority down, don't respond
+
+- Testing
+        - Reply with error
+        - Not update anything else
+
+TODO:
+- Test with even # of servers
