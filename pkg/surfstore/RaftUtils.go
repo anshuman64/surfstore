@@ -2,7 +2,6 @@ package surfstore
 
 import (
 	"bufio"
-	"google.golang.org/grpc"
 	"io"
 	"log"
 	"net"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"google.golang.org/grpc"
 )
 
 func LoadRaftConfigFile(filename string) (ipList []string) {
@@ -25,7 +26,7 @@ func LoadRaftConfigFile(filename string) (ipList []string) {
 	for index := 0; ; index++ {
 		lineContent, _, e := configReader.ReadLine()
 		if e != nil && e != io.EOF {
-			log.Fatal(SURF_CLIENT, "Error During Reading Config", e)
+			log.Fatal("Error During Reading Config", e)
 		}
 
 		if e == io.EOF {
@@ -46,22 +47,31 @@ func LoadRaftConfigFile(filename string) (ipList []string) {
 }
 
 func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstore, error) {
-	// TODO any initialization you need to do here
-
+	// TODO: any initialization you need to do here
 	isCrashedMutex := sync.RWMutex{}
 
 	server := RaftSurfstore{
-		// TODO initialize any fields you add here
-        ip: ips[id],
-        ipList: ips,
-        serverId: id,
+		// TODO: initialize any fields you add here
+		// Server Info
+		ip:       ips[id],
+		ipList:   ips,
+		serverId: id,
 
-        commitIndex: -1,
+		// General
+		term:      0,
+		metaStore: NewMetaStore(blockStoreAddr),
+		log:       make([]*UpdateOperation, 0),
 
-		isLeader:       false,
-		term:           0,
-		metaStore:      NewMetaStore(blockStoreAddr),
-		log:            make([]*UpdateOperation, 0),
+		// Log
+		commitIndex: -1,
+		lastApplied: -1,
+
+		// Leader
+		isLeader:   false,
+		nextIndex:  make([]int64, len(ips)),
+		matchIndex: make([]int64, len(ips)),
+
+		// Chaos Monkey
 		isCrashed:      false,
 		notCrashedCond: sync.NewCond(&isCrashedMutex),
 		isCrashedMutex: isCrashedMutex,
@@ -72,15 +82,15 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 
 // TODO Start up the Raft server and any services here
 func ServeRaftServer(server *RaftSurfstore) error {
-    s := grpc.NewServer()
-    RegisterRaftSurfstoreServer(s, server)
+	s := grpc.NewServer()
+	RegisterRaftSurfstoreServer(s, server)
 
-    l, e := net.Listen("tcp", server.ip)
-    if e != nil {
-        return e
-    }
+	l, e := net.Listen("tcp", server.ip)
+	if e != nil {
+		return e
+	}
 
-    go s.commitWorker()
+	// go s.commitWorker()
 
-    return s.Serve(l)
+	return s.Serve(l)
 }

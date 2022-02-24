@@ -10,7 +10,7 @@ cd proj5
 2. Rename all module paths from "proj4" to "proj5" (you may have more that are not shown here)
 ```console
 $ grep -r proj4 ./
-cmd/SurfstoreServerExec/main.go:        "cse224/proj4/pkg/surfstore"
+cmd/SurfstoreRaftServerExec/main.go:        "cse224/proj4/pkg/surfstore"
 cmd/SurfstoreClientExec/main.go:        "cse224/proj4/pkg/surfstore"
 go.mod:module cse224/proj4
 ```

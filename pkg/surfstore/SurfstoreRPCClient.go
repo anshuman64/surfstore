@@ -2,6 +2,7 @@ package surfstore
 
 import (
 	context "context"
+	"errors"
 	"time"
 
 	grpc "google.golang.org/grpc"
@@ -33,23 +34,22 @@ func (surfClient *RPCClient) StartBlockStoreClient(blockStoreAddr string) (conn 
 	return conn, blockstore_client, ctx, cancel, nil
 }
 
-func (surfClient *RPCClient) StartMetaStoreClient() (conn *grpc.ClientConn, metastore_client MetaStoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
+func (surfClient *RPCClient) StartRaftSurfstoreClient(addr string) (conn *grpc.ClientConn, raft_surfstore_client RaftSurfstoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
 	// Connect to server
-	// TODO: fix this
-	conn, err = grpc.Dial(surfClient.MetaStoreAddrs[0], grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	metastore_client = NewRaftSurfstoreClient(conn)
+	raft_surfstore_client = NewRaftSurfstoreClient(conn)
 
 	// Perform RPC call
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 
-	return conn, metastore_client, ctx, cancel, nil
+	return conn, raft_surfstore_client, ctx, cancel, nil
 }
 
 ///////////////////
-// Main Functions
+// Blockstore Functions
 ///////////////////
 
 func (surfClient *RPCClient) GetBlock(blockHash string, blockStoreAddr string, block *Block) error {
@@ -104,61 +104,77 @@ func (surfClient *RPCClient) HasBlocks(blockHashesIn []string, blockStoreAddr st
 	return conn.Close()
 }
 
+///////////////////
+// RaftSurfstore Functions
+///////////////////
+
 func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileMetaData) error {
-	conn, metastore_client, ctx, cancel, err := surfClient.StartMetaStoreClient()
-	if err != nil {
-		return err
-	}
-	defer cancel()
+	for _, addr := range surfClient.MetaStoreAddrs {
+		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		if err != nil {
+			continue
+		}
+		defer cancel()
 
-	f, err := metastore_client.GetFileInfoMap(ctx, &emptypb.Empty{})
-	if err != nil {
-		conn.Close()
-		return err
-	}
-	*serverFileInfoMap = f.FileInfoMap
+		f, err := raft_surfstore_client.GetFileInfoMap(ctx, &emptypb.Empty{})
+		if err != nil {
+			conn.Close()
+			continue
+		}
+		*serverFileInfoMap = f.FileInfoMap
 
-	return conn.Close()
+		return conn.Close()
+	}
+
+	return errors.New("couldn't connect to any server")
 }
 
 func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersion *int32) error {
-	conn, metastore_client, ctx, cancel, err := surfClient.StartMetaStoreClient()
-	if err != nil {
-		return err
-	}
-	defer cancel()
+	for _, addr := range surfClient.MetaStoreAddrs {
+		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		if err != nil {
+			continue
+		}
+		defer cancel()
 
-	v, err := metastore_client.UpdateFile(ctx, fileMetaData)
-	if err != nil {
-		conn.Close()
-		return err
-	}
-	*latestVersion = v.Version
+		v, err := raft_surfstore_client.UpdateFile(ctx, fileMetaData)
+		if err != nil {
+			conn.Close()
+			continue
+		}
+		*latestVersion = v.Version
 
-	return conn.Close()
+		return conn.Close()
+	}
+
+	return errors.New("couldn't connect to any server")
 }
 
 func (surfClient *RPCClient) GetBlockStoreAddr(blockStoreAddr *string) error {
-	conn, metastore_client, ctx, cancel, err := surfClient.StartMetaStoreClient()
-	if err != nil {
-		return err
-	}
-	defer cancel()
+	for _, addr := range surfClient.MetaStoreAddrs {
+		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		if err != nil {
+			continue
+		}
+		defer cancel()
 
-	b, err := metastore_client.GetBlockStoreAddr(ctx, &emptypb.Empty{})
-	if err != nil {
-		conn.Close()
-		return err
-	}
-	*blockStoreAddr = b.Addr
+		b, err := raft_surfstore_client.GetBlockStoreAddr(ctx, &emptypb.Empty{})
+		if err != nil {
+			conn.Close()
+			continue
+		}
+		*blockStoreAddr = b.Addr
 
-	return conn.Close()
+		return conn.Close()
+	}
+
+	return errors.New("couldn't connect to any server")
 }
 
 // This line guarantees all method for RPCClient are implemented
 var _ ClientInterface = new(RPCClient)
 
-// Create an Surfstore RPC client
+// Create a Surfstore RPC client
 func NewSurfstoreRPCClient(addrs []string, baseDir string, blockSize int) RPCClient {
 	return RPCClient{
 		MetaStoreAddrs: addrs,

@@ -3,12 +3,13 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
-	"google.golang.org/grpc"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 type TestInfo struct {
@@ -71,7 +72,7 @@ func EndTest(test TestInfo) {
 }
 
 func InitBlockStore(blockStorePort string) *exec.Cmd {
-	blockCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "block", "-p", blockStorePort, "-l")
+	blockCmd := exec.Command("_bin/SurfstoreRaftServerExec", "-s", "block", "-p", blockStorePort, "-l")
 	blockCmd.Stderr = os.Stderr
 	blockCmd.Stdout = os.Stdout
 	err := blockCmd.Start()
