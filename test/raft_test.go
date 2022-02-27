@@ -3,8 +3,10 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	"log"
 	"testing"
+
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestRaftSetLeader(t *testing.T) {
@@ -55,6 +57,7 @@ func TestRaftSetLeader(t *testing.T) {
 	for idx, server := range test.Clients {
 		// all should have the leaders term
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		log.Print(idx, state)
 		if state.Term != int64(2) {
 			t.Logf("Server should be in term %d", 2)
 			t.Fail()

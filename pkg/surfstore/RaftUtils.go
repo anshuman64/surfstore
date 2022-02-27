@@ -51,12 +51,10 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 	isCrashedMutex := sync.RWMutex{}
 
 	server := RaftSurfstore{
-		// TODO: initialize any fields you add here
 		// Server Info
-		ip:          ips[id],
-		ipList:      ips,
-		serverId:    id,
-		surfClients: make([]*RaftSurfstoreClient, len(ips)),
+		ip:       ips[id],
+		ipList:   ips,
+		serverId: id,
 
 		// General
 		term:      0,
@@ -92,24 +90,6 @@ func ServeRaftServer(server *RaftSurfstore) error {
 	if e != nil {
 		return e
 	}
-
-	// Create connections to other nodes
-	for i, addr := range server.ipList {
-		for {
-			if int64(i) == server.serverId {
-				continue
-			}
-
-			_, raft_surfstore_client, _, _, err := StartRaftSurfstoreClient(addr)
-			if err != nil {
-				continue
-			}
-
-			server.surfClients[i] = &raft_surfstore_client
-		}
-	}
-
-	// go s.commitWorker()
 
 	return s.Serve(l)
 }
