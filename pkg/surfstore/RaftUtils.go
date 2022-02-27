@@ -47,15 +47,16 @@ func LoadRaftConfigFile(filename string) (ipList []string) {
 }
 
 func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstore, error) {
-	// TODO: any initialization you need to do here
+	isLeaderMutex := sync.RWMutex{}
 	isCrashedMutex := sync.RWMutex{}
 
 	server := RaftSurfstore{
 		// TODO: initialize any fields you add here
 		// Server Info
-		ip:       ips[id],
-		ipList:   ips,
-		serverId: id,
+		ip:          ips[id],
+		ipList:      ips,
+		serverId:    id,
+		surfClients: make([]*RaftSurfstoreClient, len(ips)),
 
 		// General
 		term:      0,
@@ -67,14 +68,16 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 		lastApplied: -1,
 
 		// Leader
-		isLeader:   false,
-		nextIndex:  make([]int64, len(ips)),
-		matchIndex: make([]int64, len(ips)),
+		isLeader:      false,
+		nextIndex:     make([]int64, len(ips)),
+		matchIndex:    make([]int64, len(ips)),
+		isLeaderMutex: isLeaderMutex,
+		isLeaderCond:  sync.NewCond(&isLeaderMutex),
 
 		// Chaos Monkey
 		isCrashed:      false,
-		notCrashedCond: sync.NewCond(&isCrashedMutex),
 		isCrashedMutex: isCrashedMutex,
+		notCrashedCond: sync.NewCond(&isCrashedMutex),
 	}
 
 	return &server, nil
@@ -88,6 +91,22 @@ func ServeRaftServer(server *RaftSurfstore) error {
 	l, e := net.Listen("tcp", server.ip)
 	if e != nil {
 		return e
+	}
+
+	// Create connections to other nodes
+	for i, addr := range server.ipList {
+		for {
+			if int64(i) == server.serverId {
+				continue
+			}
+
+			_, raft_surfstore_client, _, _, err := StartRaftSurfstoreClient(addr)
+			if err != nil {
+				continue
+			}
+
+			server.surfClients[i] = &raft_surfstore_client
+		}
 	}
 
 	// go s.commitWorker()

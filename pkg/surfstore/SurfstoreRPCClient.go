@@ -20,7 +20,7 @@ type RPCClient struct {
 // Helper Functions
 /////////////////////
 
-func (surfClient *RPCClient) StartBlockStoreClient(blockStoreAddr string) (conn *grpc.ClientConn, blockstore_client BlockStoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
+func StartBlockStoreClient(blockStoreAddr string) (conn *grpc.ClientConn, blockstore_client BlockStoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
 	// Connect to server
 	conn, err = grpc.Dial(blockStoreAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -34,7 +34,7 @@ func (surfClient *RPCClient) StartBlockStoreClient(blockStoreAddr string) (conn 
 	return conn, blockstore_client, ctx, cancel, nil
 }
 
-func (surfClient *RPCClient) StartRaftSurfstoreClient(addr string) (conn *grpc.ClientConn, raft_surfstore_client RaftSurfstoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
+func StartRaftSurfstoreClient(addr string) (conn *grpc.ClientConn, raft_surfstore_client RaftSurfstoreClient, ctx context.Context, cancel context.CancelFunc, err error) {
 	// Connect to server
 	conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -53,7 +53,7 @@ func (surfClient *RPCClient) StartRaftSurfstoreClient(addr string) (conn *grpc.C
 ///////////////////
 
 func (surfClient *RPCClient) GetBlock(blockHash string, blockStoreAddr string, block *Block) error {
-	conn, blockstore_client, ctx, cancel, err := surfClient.StartBlockStoreClient(blockStoreAddr)
+	conn, blockstore_client, ctx, cancel, err := StartBlockStoreClient(blockStoreAddr)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (surfClient *RPCClient) GetBlock(blockHash string, blockStoreAddr string, b
 }
 
 func (surfClient *RPCClient) PutBlock(block *Block, metaStoreAddr string, succ *bool) error {
-	conn, blockstore_client, ctx, cancel, err := surfClient.StartBlockStoreClient(blockStoreAddr)
+	conn, blockstore_client, ctx, cancel, err := StartBlockStoreClient(blockStoreAddr)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (surfClient *RPCClient) PutBlock(block *Block, metaStoreAddr string, succ *
 }
 
 func (surfClient *RPCClient) HasBlocks(blockHashesIn []string, blockStoreAddr string, blockHashesOut *[]string) error {
-	conn, blockstore_client, ctx, cancel, err := surfClient.StartBlockStoreClient(blockStoreAddr)
+	conn, blockstore_client, ctx, cancel, err := StartBlockStoreClient(blockStoreAddr)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (surfClient *RPCClient) HasBlocks(blockHashesIn []string, blockStoreAddr st
 
 func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileMetaData) error {
 	for _, addr := range surfClient.MetaStoreAddrs {
-		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		conn, raft_surfstore_client, ctx, cancel, err := StartRaftSurfstoreClient(addr)
 		if err != nil {
 			continue
 		}
@@ -131,7 +131,7 @@ func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileM
 
 func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersion *int32) error {
 	for _, addr := range surfClient.MetaStoreAddrs {
-		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		conn, raft_surfstore_client, ctx, cancel, err := StartRaftSurfstoreClient(addr)
 		if err != nil {
 			continue
 		}
@@ -152,7 +152,7 @@ func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersio
 
 func (surfClient *RPCClient) GetBlockStoreAddr(blockStoreAddr *string) error {
 	for _, addr := range surfClient.MetaStoreAddrs {
-		conn, raft_surfstore_client, ctx, cancel, err := surfClient.StartRaftSurfstoreClient(addr)
+		conn, raft_surfstore_client, ctx, cancel, err := StartRaftSurfstoreClient(addr)
 		if err != nil {
 			continue
 		}
