@@ -47,8 +47,8 @@ func LoadRaftConfigFile(filename string) (ipList []string) {
 }
 
 func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstore, error) {
-	isLeaderMutex := sync.RWMutex{}
-	isCrashedMutex := sync.RWMutex{}
+	isLeaderMutex := &sync.RWMutex{}
+	isCrashedMutex := &sync.RWMutex{}
 
 	server := RaftSurfstore{
 		// Server Info
@@ -70,12 +70,12 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 		nextIndex:     make([]int64, len(ips)),
 		matchIndex:    make([]int64, len(ips)),
 		isLeaderMutex: isLeaderMutex,
-		isLeaderCond:  sync.NewCond(&isLeaderMutex),
+		isLeaderCond:  sync.NewCond(isLeaderMutex),
 
 		// Chaos Monkey
 		isCrashed:      false,
 		isCrashedMutex: isCrashedMutex,
-		notCrashedCond: sync.NewCond(&isCrashedMutex),
+		notCrashedCond: sync.NewCond(isCrashedMutex),
 	}
 
 	return &server, nil

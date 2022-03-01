@@ -29,12 +29,12 @@ type RaftSurfstore struct {
 	isLeader      bool
 	nextIndex     []int64
 	matchIndex    []int64
-	isLeaderMutex sync.RWMutex
+	isLeaderMutex *sync.RWMutex
 	isLeaderCond  *sync.Cond
 
 	// Chaos Monkey
 	isCrashed      bool
-	isCrashedMutex sync.RWMutex
+	isCrashedMutex *sync.RWMutex
 	notCrashedCond *sync.Cond
 
 	UnimplementedRaftSurfstoreServer
