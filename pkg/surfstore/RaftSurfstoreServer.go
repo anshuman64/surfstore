@@ -67,12 +67,11 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 		}
 	}
 
-	if approval_count > len(s.ipList)/2 {
-		//log.Printf("GetFileInfoMap %dC. Term=%d.", s.serverId, s.term)
-		return s.metaStore.GetFileInfoMap(ctx, &emptypb.Empty{})
-	} else {
-		//log.Printf("GetFileInfoMap %dD. Term=%d.", s.serverId, s.term)
-		return nil, errors.New("getFileInfoMap failed")
+	for {
+		if approval_count > len(s.ipList)/2 {
+			//log.Printf("GetFileInfoMap %dC. Term=%d.", s.serverId, s.term)
+			return s.metaStore.GetFileInfoMap(ctx, &emptypb.Empty{})
+		}
 	}
 }
 
@@ -98,10 +97,10 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 		}
 	}
 
-	if approval_count > len(s.ipList)/2 {
-		return s.metaStore.GetBlockStoreAddr(ctx, &emptypb.Empty{})
-	} else {
-		return nil, errors.New("getFileInfoMap failed")
+	for {
+		if approval_count > len(s.ipList)/2 {
+			return s.metaStore.GetBlockStoreAddr(ctx, &emptypb.Empty{})
+		}
 	}
 }
 
@@ -139,17 +138,17 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		}
 	}
 
-	if approval_count > len(s.ipList)/2 {
-		// //log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
-		s.lastApplied += 1
-		s.commitIndex += 1
+	for {
+		if approval_count > len(s.ipList)/2 {
+			// //log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
+			s.lastApplied += 1
+			s.commitIndex += 1
 
-		// Send heartbeat
-		s.SendHeartbeat(ctx, &emptypb.Empty{})
+			// Send heartbeat
+			s.SendHeartbeat(ctx, &emptypb.Empty{})
 
-		return s.metaStore.UpdateFile(ctx, filemeta)
-	} else {
-		return nil, errors.New("getFileInfoMap failed")
+			return s.metaStore.UpdateFile(ctx, filemeta)
+		}
 	}
 }
 
