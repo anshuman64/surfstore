@@ -32,8 +32,12 @@ func ClientSync(client RPCClient) {
 	CompareCurrentLocalIndex()
 
 	// Get remote_index & blockStoreAddr
-	client.GetFileInfoMap(&remote_index)
-	client.GetBlockStoreAddr(&blockStoreAddr)
+	if err := client.GetFileInfoMap(&remote_index); err != nil {
+		log.Fatal(err)
+	}
+	if err := client.GetBlockStoreAddr(&blockStoreAddr); err != nil {
+		log.Fatal(err)
+	}
 
 	// Compare remote_index with local_index
 	if err := CompareRemoteLocalIndex(client); err != nil {
@@ -323,7 +327,9 @@ func CompareCurrentRemoteIndex(client RPCClient) error {
 		log.Println(key + ": upload file")
 		if err := client.UpdateFile(current_meta, &version); err != nil {
 			// If fails, download latest version of file
-			client.GetFileInfoMap(&remote_index)
+			if err := client.GetFileInfoMap(&remote_index); err != nil {
+				return err
+			}
 			if err := UpdateFile(client, remote_index[key]); err != nil {
 				return err
 			}

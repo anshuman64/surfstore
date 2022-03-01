@@ -45,6 +45,7 @@ type RaftSurfstore struct {
 ////////////////////////
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
+	log.Printf("GetFileInfoMap %dA. Term=%d.", s.serverId, s.term)
 	// Initial error checking
 	if s.isCrashed {
 		return nil, errors.New("isCrashed")
@@ -54,24 +55,25 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 		return nil, errors.New("not isLeader")
 	}
 
-	channel := make(chan *AppendEntryOutput, len(s.ipList)-1)
 	approval_count := 1
 
 	for i := range s.ipList {
 		if i != int(s.serverId) {
-			s.ApproveEntry(i, channel)
+			output, _ := s.ApproveEntry(i)
+
+			if output != nil && output.Success {
+				log.Printf("GetFileInfoMap %dB. Term=%d.", s.serverId, s.term)
+				approval_count += 1
+			}
 		}
 	}
 
-	for {
-		output := <-channel
-		if output != nil && output.Success {
-			approval_count += 1
-		}
-
-		if approval_count > len(s.ipList)/2 {
-			return s.metaStore.GetFileInfoMap(ctx, &emptypb.Empty{})
-		}
+	if approval_count > len(s.ipList)/2 {
+		log.Printf("GetFileInfoMap %dC. Term=%d.", s.serverId, s.term)
+		return s.metaStore.GetFileInfoMap(ctx, &emptypb.Empty{})
+	} else {
+		log.Printf("GetFileInfoMap %dD. Term=%d.", s.serverId, s.term)
+		return nil, errors.New("getFileInfoMap failed")
 	}
 }
 
@@ -85,24 +87,22 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 		return nil, errors.New("not isLeader")
 	}
 
-	channel := make(chan *AppendEntryOutput, len(s.ipList)-1)
 	approval_count := 1
 
 	for i := range s.ipList {
 		if i != int(s.serverId) {
-			s.ApproveEntry(i, channel)
+			output, _ := s.ApproveEntry(i)
+
+			if output != nil && output.Success {
+				approval_count += 1
+			}
 		}
 	}
 
-	for {
-		output := <-channel
-		if output != nil && output.Success {
-			approval_count += 1
-		}
-
-		if approval_count > len(s.ipList)/2 {
-			return s.metaStore.GetBlockStoreAddr(ctx, &emptypb.Empty{})
-		}
+	if approval_count > len(s.ipList)/2 {
+		return s.metaStore.GetBlockStoreAddr(ctx, &emptypb.Empty{})
+	} else {
+		return nil, errors.New("getFileInfoMap failed")
 	}
 }
 
@@ -126,38 +126,35 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.log = append(s.log, &update_operation)
 
 	// Go routine to nodes for approval
-	channel := make(chan *AppendEntryOutput, len(s.ipList)-1)
 	approval_count := 1
-
 	// log.Printf("UpdateFile %dB. Term=%d.", s.serverId, s.term)
 
 	for i := range s.ipList {
 		if i != int(s.serverId) {
-			s.ApproveEntry(i, channel)
+			output, _ := s.ApproveEntry(i)
+
+			if output != nil && output.Success {
+				// log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
+				approval_count += 1
+			}
 		}
 	}
 
-	for {
-		output := <-channel
-		if output != nil && output.Success {
-			// log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
-			approval_count += 1
-		}
+	if approval_count > len(s.ipList)/2 {
+		// log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
+		s.lastApplied += 1
+		s.commitIndex += 1
 
-		if approval_count > len(s.ipList)/2 {
-			// log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
-			s.lastApplied += 1
-			s.commitIndex += 1
+		// Send heartbeat
+		s.SendHeartbeat(ctx, &emptypb.Empty{})
 
-			// Send heartbeat
-			s.SendHeartbeat(ctx, &emptypb.Empty{})
-
-			return s.metaStore.UpdateFile(ctx, filemeta)
-		}
+		return s.metaStore.UpdateFile(ctx, filemeta)
+	} else {
+		return nil, errors.New("getFileInfoMap failed")
 	}
 }
 
-func (s *RaftSurfstore) ApproveEntry(serverIdx int, channel chan *AppendEntryOutput) error {
+func (s *RaftSurfstore) ApproveEntry(serverIdx int) (*AppendEntryOutput, error) {
 	log.Printf("ApproveEntry %dA. Term=%d.", s.serverId, s.term)
 
 	// Connect to client
@@ -202,22 +199,21 @@ func (s *RaftSurfstore) ApproveEntry(serverIdx int, channel chan *AppendEntryOut
 	output, err := raft_surfstore_client.AppendEntries(ctx, input)
 	if err != nil {
 		log.Printf("ApproveEntry %dD. Term=%d.", s.serverId, s.term)
-		return conn.Close()
+		return nil, conn.Close()
 	}
 
 	if output.Success {
 		log.Printf("ApproveEntry %dE. Term=%d.", s.serverId, s.term)
-		channel <- output
 		// If successful, update nextIndex and matchIndex
 		s.nextIndex[serverIdx] += int64(len(entries))
 		s.matchIndex[serverIdx] = output.MatchedIndex
-		return conn.Close()
+		return output, conn.Close()
 	} else {
 		log.Printf("ApproveEntry %dF. Term=%d.", s.serverId, s.term)
 		// If AppendEntries fails, decrement nextIndex and try again
 		s.nextIndex[serverIdx]--
-		s.ApproveEntry(serverIdx, channel)
-		return conn.Close()
+		output, _ := s.ApproveEntry(serverIdx)
+		return output, conn.Close()
 	}
 }
 
@@ -378,10 +374,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	}
 
 	// Send heartbeat
-	channel := make(chan *AppendEntryOutput, len(s.ipList)-1)
 	for i := range s.ipList {
 		if i != int(s.serverId) {
-			s.ApproveEntry(i, channel)
+			s.ApproveEntry(i)
 		}
 	}
 
