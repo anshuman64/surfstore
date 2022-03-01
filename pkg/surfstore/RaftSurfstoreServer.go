@@ -3,7 +3,6 @@ package surfstore
 import (
 	context "context"
 	"errors"
-	"log"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -45,10 +44,10 @@ type RaftSurfstore struct {
 ////////////////////////
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
-	log.Printf("GetFileInfoMap %dA. Term=%d.", s.serverId, s.term)
+	//log.Printf("GetFileInfoMap %dA. Term=%d.", s.serverId, s.term)
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	if !s.isLeader {
@@ -62,17 +61,17 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 			output, _ := s.ApproveEntry(i)
 
 			if output != nil && output.Success {
-				log.Printf("GetFileInfoMap %dB. Term=%d.", s.serverId, s.term)
+				//log.Printf("GetFileInfoMap %dB. Term=%d.", s.serverId, s.term)
 				approval_count += 1
 			}
 		}
 	}
 
 	if approval_count > len(s.ipList)/2 {
-		log.Printf("GetFileInfoMap %dC. Term=%d.", s.serverId, s.term)
+		//log.Printf("GetFileInfoMap %dC. Term=%d.", s.serverId, s.term)
 		return s.metaStore.GetFileInfoMap(ctx, &emptypb.Empty{})
 	} else {
-		log.Printf("GetFileInfoMap %dD. Term=%d.", s.serverId, s.term)
+		//log.Printf("GetFileInfoMap %dD. Term=%d.", s.serverId, s.term)
 		return nil, errors.New("getFileInfoMap failed")
 	}
 }
@@ -80,7 +79,7 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	if !s.isLeader {
@@ -107,11 +106,11 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 }
 
 func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) (*Version, error) {
-	log.Printf("UpdateFile %dA. Term=%d.", s.serverId, s.term)
+	//log.Printf("UpdateFile %dA. Term=%d.", s.serverId, s.term)
 
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	if !s.isLeader {
@@ -127,21 +126,21 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 	// Go routine to nodes for approval
 	approval_count := 1
-	// log.Printf("UpdateFile %dB. Term=%d.", s.serverId, s.term)
+	// //log.Printf("UpdateFile %dB. Term=%d.", s.serverId, s.term)
 
 	for i := range s.ipList {
 		if i != int(s.serverId) {
 			output, _ := s.ApproveEntry(i)
 
 			if output != nil && output.Success {
-				// log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
+				// //log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
 				approval_count += 1
 			}
 		}
 	}
 
 	if approval_count > len(s.ipList)/2 {
-		// log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
+		// //log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
 		s.lastApplied += 1
 		s.commitIndex += 1
 
@@ -155,7 +154,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 }
 
 func (s *RaftSurfstore) ApproveEntry(serverIdx int) (*AppendEntryOutput, error) {
-	log.Printf("ApproveEntry %dA. Term=%d.", s.serverId, s.term)
+	//log.Printf("ApproveEntry %dA. Term=%d.", s.serverId, s.term)
 
 	// Connect to client
 	var conn *grpc.ClientConn
@@ -179,12 +178,12 @@ func (s *RaftSurfstore) ApproveEntry(serverIdx int) (*AppendEntryOutput, error) 
 	entries := make([]*UpdateOperation, 0)
 
 	if len(s.log) > 0 {
-		log.Printf("ApproveEntry %dB. Term=%d.", s.serverId, s.term)
+		//log.Printf("ApproveEntry %dB. Term=%d.", s.serverId, s.term)
 		entries = s.log[s.nextIndex[serverIdx]:]
 	}
 
 	if prev_log_index >= 0 {
-		log.Printf("ApproveEntry %dC. Term=%d.", s.serverId, s.term)
+		//log.Printf("ApproveEntry %dC. Term=%d.", s.serverId, s.term)
 		prev_log_term = s.log[prev_log_index].Term
 	}
 
@@ -198,18 +197,18 @@ func (s *RaftSurfstore) ApproveEntry(serverIdx int) (*AppendEntryOutput, error) 
 
 	output, err := raft_surfstore_client.AppendEntries(ctx, input)
 	if err != nil {
-		log.Printf("ApproveEntry %dD. Term=%d.", s.serverId, s.term)
+		//log.Printf("ApproveEntry %dD. Term=%d.", s.serverId, s.term)
 		return nil, conn.Close()
 	}
 
 	if output.Success {
-		log.Printf("ApproveEntry %dE. Term=%d.", s.serverId, s.term)
+		//log.Printf("ApproveEntry %dE. Term=%d.", s.serverId, s.term)
 		// If successful, update nextIndex and matchIndex
 		s.nextIndex[serverIdx] += int64(len(entries))
 		s.matchIndex[serverIdx] = output.MatchedIndex
 		return output, conn.Close()
 	} else {
-		log.Printf("ApproveEntry %dF. Term=%d.", s.serverId, s.term)
+		//log.Printf("ApproveEntry %dF. Term=%d.", s.serverId, s.term)
 		// If AppendEntries fails, decrement nextIndex and try again
 		s.nextIndex[serverIdx]--
 		output, _ := s.ApproveEntry(serverIdx)
@@ -237,25 +236,25 @@ func (s *RaftSurfstore) StepDown() {
 // 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 //    of last new entry)
 func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInput) (*AppendEntryOutput, error) {
-	// log.Printf("AppendEntries %dA. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
+	// //log.Printf("AppendEntries %dA. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
 
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	// Step 0: Handle term conflict
 	if s.term < input.Term {
-		// log.Printf("AppendEntries %dB. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
+		// //log.Printf("AppendEntries %dB. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
 		s.term = input.Term
 		s.StepDown()
 	}
 
-	// log.Printf("AppendEntries %dC. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
+	// //log.Printf("AppendEntries %dC. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
 
 	// Step 1 & 2
 	if s.term > input.Term || s.isLeader || (len(s.log) > 0 && input.PrevLogIndex >= 0 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
-		// log.Printf("AppendEntries %dD. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
+		// //log.Printf("AppendEntries %dD. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
 		output := &AppendEntryOutput{
 			ServerId:     s.serverId,
 			Term:         s.term,
@@ -266,7 +265,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		return output, nil
 	}
 
-	// log.Printf("AppendEntries %dE. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
+	// //log.Printf("AppendEntries %dE. Term=%d. Input Term=%d", s.serverId, s.term, input.Term)
 
 	// Step 3
 	for i := range input.Entries {
@@ -310,7 +309,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// Check if isCrashed
 	if s.isCrashed {
-		return &Success{Flag: false}, errors.New("isCrashed")
+		return &Success{Flag: false}, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	s.isLeaderMutex.Lock()
@@ -338,11 +337,11 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Send a 'Heartbeat" (AppendEntries with no log entries) to the other servers
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
-	// log.Printf("SendHeartbeat %dA. Term=%d", s.serverId, s.term)
+	// //log.Printf("SendHeartbeat %dA. Term=%d", s.serverId, s.term)
 
 	// Check if isCrashed
 	if s.isCrashed {
-		return &Success{Flag: false}, errors.New("isCrashed")
+		return &Success{Flag: false}, errors.New("ERR_SERVER_CRASHED")
 	}
 
 	// Check if not isLeader
@@ -350,7 +349,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		return &Success{Flag: false}, nil
 	}
 
-	// log.Printf("SendHeartbeat %dB. Term=%d", s.serverId, s.term)
+	// //log.Printf("SendHeartbeat %dB. Term=%d", s.serverId, s.term)
 
 	// Update commitIndex
 	for {

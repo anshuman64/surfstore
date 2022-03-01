@@ -162,8 +162,8 @@ func TestSyncTwoClientsClusterFailure(t *testing.T) {
 
 	//client2 syncs
 	err = SyncClient("localhost:8080", "test1", BLOCK_SIZE, cfgPath)
-	if err != nil {
-		t.Fatalf("Sync failed")
+	if err == nil {
+		t.Fatalf("Sync should have failed")
 	}
 
 	workingDir, _ := os.Getwd()
