@@ -3,7 +3,6 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
-	"log"
 	"testing"
 
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -49,6 +48,7 @@ func TestRaftSetLeader(t *testing.T) {
 	leaderIdx = 2
 	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
 
+	t.Logf("========")
 	// heartbeat
 	for _, server := range test.Clients {
 		server.SendHeartbeat(test.Context, &emptypb.Empty{})
@@ -57,9 +57,9 @@ func TestRaftSetLeader(t *testing.T) {
 	for idx, server := range test.Clients {
 		// all should have the leaders term
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
-		log.Print(idx, state)
+		// log.Print(idx, state)
 		if state.Term != int64(2) {
-			t.Logf("Server should be in term %d", 2)
+			t.Logf("Server %d should be in term %d", idx, 2)
 			t.Fail()
 		}
 		if idx == leaderIdx {
@@ -104,14 +104,20 @@ func TestRaftFollowersGetUpdates(t *testing.T) {
 		FileMetaData: filemeta1,
 	})
 
-	for _, server := range test.Clients {
+	t.Log(goldenLog[0].Term)
+	t.Log(goldenMeta.FileMetaMap)
+	t.Log("======")
+
+	for idx, server := range test.Clients {
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
 		if !SameLog(goldenLog, state.Log) {
-			t.Log("Logs do not match")
+			t.Logf("%d", len(state.Log))
+			t.Logf("Logs do not match with server %d", idx)
 			t.Fail()
 		}
 		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
-			t.Log("MetaStore state is not correct")
+			t.Log(state.MetaMap.FileInfoMap)
+			t.Logf("MetaStore state is not correct with server %d", idx)
 			t.Fail()
 		}
 	}
