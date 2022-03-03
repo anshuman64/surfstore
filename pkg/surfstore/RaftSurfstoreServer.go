@@ -65,12 +65,10 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 
 	for {
 		output := <-approval_chan
-		if output == nil {
-			return_count += 1
-		} else if output != nil && output.Success {
-			//log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
+		return_count += 1
+
+		if output != nil && output.Success {
 			approval_count += 1
-			return_count += 1
 		}
 
 		if return_count >= len(s.ipList) && approval_count > len(s.ipList)/2 {
@@ -101,12 +99,10 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 
 	for {
 		output := <-approval_chan
-		if output == nil {
-			return_count += 1
-		} else if output != nil && output.Success {
-			//log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
+		return_count += 1
+
+		if output != nil && output.Success {
 			approval_count += 1
-			return_count += 1
 		}
 
 		if return_count >= len(s.ipList) && approval_count > len(s.ipList)/2 {
@@ -134,7 +130,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 	s.log = append(s.log, &update_operation)
 
-	// Go routine to nodes for approval
 	approval_chan := make(chan *AppendEntryOutput, len(s.ipList)-1)
 	approval_count := 1
 	return_count := 1
@@ -149,12 +144,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 	for {
 		output := <-approval_chan
-		if output == nil {
-			return_count += 1
-		} else if output != nil && output.Success {
-			//log.Printf("UpdateFile %dD. Term=%d.", s.serverId, s.term)
+		return_count += 1
+
+		if output != nil && output.Success {
 			approval_count += 1
-			return_count += 1
 		}
 
 		if return_count >= len(s.ipList) && approval_count > len(s.ipList)/2 {
@@ -169,6 +162,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		}
 	}
 }
+
+////////////////////////
+// ApproveEntry & AppendEntries
+////////////////////////
 
 func (s *RaftSurfstore) ApproveEntry(serverIdx int, approval_chan chan *AppendEntryOutput) error {
 	//log.Printf("ApproveEntry %dA. Term=%d.", s.serverId, s.term)
@@ -215,29 +212,29 @@ func (s *RaftSurfstore) ApproveEntry(serverIdx int, approval_chan chan *AppendEn
 	output, err := raft_surfstore_client.AppendEntries(ctx, input)
 	if err != nil {
 		//log.Printf("ApproveEntry %dD. Term=%d.", s.serverId, s.term)
+
+		// Server was crashed
 		approval_chan <- nil
 		return conn.Close()
 	}
 
 	if output.Success {
 		//log.Printf("ApproveEntry %dE. Term=%d.", s.serverId, s.term)
-		approval_chan <- output
+
 		// If successful, update nextIndex and matchIndex
+		approval_chan <- output
 		s.nextIndex[serverIdx] += int64(len(entries))
 		s.matchIndex[serverIdx] = output.MatchedIndex
 		return conn.Close()
 	} else {
 		//log.Printf("ApproveEntry %dF. Term=%d.", s.serverId, s.term)
+
 		// If AppendEntries fails, decrement nextIndex and try again
 		s.nextIndex[serverIdx]--
 		s.ApproveEntry(serverIdx, approval_chan)
 		return conn.Close()
 	}
 }
-
-////////////////////////
-// Raft Functions
-////////////////////////
 
 func (s *RaftSurfstore) StepDown() {
 	s.isLeaderMutex.Lock()
@@ -324,6 +321,10 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	return output, nil
 }
 
+////////////////////////
+// SetLeader & SendHeartbeat
+////////////////////////
+
 // This should set the leader status and any related variables as if the node has just won an election
 func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// Check if isCrashed
@@ -393,13 +394,22 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 
 	// Send heartbeat
 	approval_chan := make(chan *AppendEntryOutput, len(s.ipList)-1)
+	return_count := 1
+
 	for i := range s.ipList {
 		if i != int(s.serverId) {
-			s.ApproveEntry(i, approval_chan)
+			go s.ApproveEntry(i, approval_chan)
 		}
 	}
 
-	return &Success{Flag: true}, nil
+	for {
+		<-approval_chan
+		return_count += 1
+
+		if return_count >= len(s.ipList) {
+			return &Success{Flag: true}, nil
+		}
+	}
 }
 
 ////////////////////////
