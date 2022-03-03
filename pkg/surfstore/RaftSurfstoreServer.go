@@ -2,7 +2,6 @@ package surfstore
 
 import (
 	context "context"
-	"errors"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -46,11 +45,11 @@ type RaftSurfstore struct {
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, ERR_SERVER_CRASHED
 	}
 
 	if !s.isLeader {
-		return nil, errors.New("not isLeader")
+		return nil, ERR_NOT_LEADER
 	}
 
 	approval_chan := make(chan *AppendEntryOutput, len(s.ipList)-1)
@@ -80,11 +79,11 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, ERR_SERVER_CRASHED
 	}
 
 	if !s.isLeader {
-		return nil, errors.New("not isLeader")
+		return nil, ERR_NOT_LEADER
 	}
 
 	approval_chan := make(chan *AppendEntryOutput, len(s.ipList)-1)
@@ -116,11 +115,11 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, ERR_SERVER_CRASHED
 	}
 
 	if !s.isLeader {
-		return nil, errors.New("not isLeader")
+		return nil, ERR_NOT_LEADER
 	}
 
 	// Append entry to log
@@ -256,7 +255,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// Initial error checking
 	if s.isCrashed {
-		return nil, errors.New("isCrashed")
+		return nil, ERR_SERVER_CRASHED
 	}
 
 	// Step 0: Handle term conflict
@@ -329,7 +328,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// Check if isCrashed
 	if s.isCrashed {
-		return &Success{Flag: false}, errors.New("isCrashed")
+		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
 
 	s.isLeaderMutex.Lock()
@@ -361,7 +360,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 
 	// Check if isCrashed
 	if s.isCrashed {
-		return &Success{Flag: false}, errors.New("isCrashed")
+		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
 
 	// Check if not isLeader

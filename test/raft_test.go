@@ -3,6 +3,8 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
+	"errors"
+	"fmt"
 	"testing"
 
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -211,10 +213,10 @@ func TestRaftRecoverable(t *testing.T) {
 	defer EndTest(test)
 
 	// TEST
-	leaderIdx := 0
-	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
 	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
 	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
+	leaderIdx := 0
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
 
 	filemeta1 := &surfstore.FileMetaData{
 		Filename:      "testFile1",
@@ -327,5 +329,30 @@ func TestRaftLogsConsistent(t *testing.T) {
 			t.Logf("MetaStore state is not correct with server %d", idx)
 			t.Fail()
 		}
+	}
+}
+
+func TestRaftServerIsCrashable(t *testing.T) {
+	t.Log("a request is sent to a crashed server.")
+
+	//Setup
+	cfgPath := "./config_files/3nodes.txt"
+	test := InitTest(cfgPath, "8080")
+	defer EndTest(test)
+
+	// TEST
+	test.Clients[0].Crash(test.Context, &emptypb.Empty{})
+
+	filemeta1 := &surfstore.FileMetaData{
+		Filename:      "testFile1",
+		Version:       1,
+		BlockHashList: nil,
+	}
+
+	_, err := test.Clients[0].UpdateFile(test.Context, filemeta1)
+	if errors.Is(err, fmt.Errorf("ERR_SERVER_CRASHED")) {
+		t.Log(err)
+		t.Log("Server should return ERR_SERVER_CRASHED")
+		t.Fail()
 	}
 }
