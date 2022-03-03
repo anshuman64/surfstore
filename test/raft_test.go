@@ -201,3 +201,131 @@ func TestRaftUpdateTwice(t *testing.T) {
 		}
 	}
 }
+
+func TestRaftRecoverable(t *testing.T) {
+	t.Log("leader1 gets a request while all other nodes are crashed. the crashed nodes recover.")
+
+	//Setup
+	cfgPath := "./config_files/3nodes.txt"
+	test := InitTest(cfgPath, "8080")
+	defer EndTest(test)
+
+	// TEST
+	leaderIdx := 0
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
+	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
+
+	filemeta1 := &surfstore.FileMetaData{
+		Filename:      "testFile1",
+		Version:       1,
+		BlockHashList: nil,
+	}
+
+	error_chan := make(chan error)
+	go func(error_chan chan error) {
+		_, err := test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
+		error_chan <- err
+	}(error_chan)
+
+	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
+	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
+	<-error_chan
+
+	goldenMeta := surfstore.NewMetaStore("")
+	goldenMeta.UpdateFile(test.Context, filemeta1)
+	goldenLog := make([]*surfstore.UpdateOperation, 0)
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         1,
+		FileMetaData: filemeta1,
+	})
+
+	for idx, server := range test.Clients {
+		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		if !SameLog(goldenLog, state.Log) {
+			t.Logf("%d", len(state.Log))
+			t.Logf("Logs do not match with server %d", idx)
+			t.Fail()
+		}
+		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
+			t.Log(state.MetaMap.FileInfoMap)
+			t.Logf("MetaStore state is not correct with server %d", idx)
+			t.Fail()
+		}
+	}
+}
+
+func TestRaftLogsConsistent(t *testing.T) {
+	t.Log("leader1 gets a request while a minority of the cluster is down. leader1 crashes. the other crashed nodes are restored. leader2 gets a request. leader1 is restored.")
+
+	//Setup
+	cfgPath := "./config_files/3nodes.txt"
+	test := InitTest(cfgPath, "8080")
+	defer EndTest(test)
+
+	// leader1 gets a request while a minority of the cluster is down
+	leaderIdx := 0
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
+
+	filemeta1 := &surfstore.FileMetaData{
+		Filename:      "testFile1",
+		Version:       1,
+		BlockHashList: nil,
+	}
+
+	test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	// leader1 crashes
+	test.Clients[leaderIdx].Crash(test.Context, &emptypb.Empty{})
+	leaderIdx = 2
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	// the other crashed nodes are restored
+	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
+
+	// leader2 gets a request
+	filemeta2 := &surfstore.FileMetaData{
+		Filename:      "testFile2",
+		Version:       1,
+		BlockHashList: nil,
+	}
+	test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta2)
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	// leader1 is restored
+	test.Clients[0].Restore(test.Context, &emptypb.Empty{})
+
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	goldenMeta := surfstore.NewMetaStore("")
+	goldenMeta.UpdateFile(test.Context, filemeta1)
+	goldenMeta.UpdateFile(test.Context, filemeta2)
+	goldenLog := make([]*surfstore.UpdateOperation, 0)
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         1,
+		FileMetaData: filemeta1,
+	})
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         2,
+		FileMetaData: filemeta2,
+	})
+
+	for idx, server := range test.Clients {
+		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		if !SameLog(goldenLog, state.Log) {
+			t.Logf("%d", len(state.Log))
+			t.Logf("Logs do not match with server %d", idx)
+			t.Fail()
+		}
+		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
+			t.Log(state.MetaMap.FileInfoMap)
+			t.Logf("MetaStore state is not correct with server %d", idx)
+			t.Fail()
+		}
+	}
+}
