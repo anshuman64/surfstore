@@ -213,10 +213,12 @@ func TestRaftRecoverable(t *testing.T) {
 	defer EndTest(test)
 
 	// TEST
-	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
-	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
 	leaderIdx := 0
 	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+
+	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
+	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
 
 	filemeta1 := &surfstore.FileMetaData{
 		Filename:      "testFile1",
@@ -224,15 +226,14 @@ func TestRaftRecoverable(t *testing.T) {
 		BlockHashList: nil,
 	}
 
-	error_chan := make(chan error)
-	go func(error_chan chan error) {
-		_, err := test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
-		error_chan <- err
-	}(error_chan)
+	go func() {
+		test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
+		test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
+	}()
 
 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
-	<-error_chan
+	test.Clients[leaderIdx].SendHeartbeat(context.Background(), &emptypb.Empty{})
 
 	goldenMeta := surfstore.NewMetaStore("")
 	goldenMeta.UpdateFile(test.Context, filemeta1)

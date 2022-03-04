@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -57,10 +56,6 @@ func ClientSync(client RPCClient) {
 //////////////////////
 // Helper Functions
 //////////////////////
-
-func Int64ToStr(x int64) string {
-	return strconv.Itoa(int(x))
-}
 
 func Min(x, y int) int {
 	if x > y {
