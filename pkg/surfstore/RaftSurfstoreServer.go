@@ -29,6 +29,7 @@ type RaftSurfstore struct {
 	matchIndex    []int64
 	isLeaderMutex *sync.RWMutex
 	isLeaderCond  *sync.Cond
+	isBusy        bool
 
 	// Chaos Monkey
 	isCrashed      bool
@@ -63,6 +64,7 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 	}
 
 	for {
+		s.isBusy = true
 		output := <-approval_chan
 		return_count += 1
 
@@ -142,6 +144,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 
 	for {
+		s.isBusy = true
 		output := <-approval_chan
 		return_count += 1
 
@@ -151,6 +154,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 		if return_count >= len(s.ipList) && approval_count > len(s.ipList)/2 {
 			//log.Printf("UpdateFile %dE. Term=%d.", s.serverId, s.term)
+			s.isBusy = false
 			s.lastApplied += 1
 			s.commitIndex += 1
 
@@ -357,6 +361,12 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	//log.Printf("SendHeartbeat %dA. Term=%d", s.serverId, s.term)
+
+	for {
+		if !s.isBusy {
+			break
+		}
+	}
 
 	// Check if isCrashed
 	if s.isCrashed {
